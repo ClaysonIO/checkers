@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosé &amp; Gold Checkers</title>
+<meta name="description" content="A 3D checkers game with a golden and pink board. Play a friend or the computer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --size: min(78vmin, 640px);
+    --sq: calc(var(--size) / 8);
+    --frame: calc(var(--sq) * 0.5);
+    --thick: 30px;
+    --tilt: 50deg;
+    --spin: 0deg;
+    --pz: 14px;
+
+    --gold-1: #fff1bd;
+    --gold-2: #f3cc62;
+    --gold-3: #d9a53a;
+    --gold-4: #a8731f;
+    --pink-1: #ffc2d8;
+    --pink-2: #f58bb3;
+    --pink-3: #e0588f;
+    --pink-4: #a8336a;
+
+    --wine-1: #6b2448;
+    --wine-2: #3f1230;
+    --wine-3: #230818;
+
+    --bg-1: #2c0f22;
+    --bg-2: #140510;
+    --ink: #fbeff4;
+    --muted: #d8aec3;
+    --panel: rgba(44, 15, 34, 0.72);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 700px at 20% -10%, rgba(243, 204, 98, 0.18), transparent 60%),
+      radial-gradient(900px 600px at 90% 110%, rgba(245, 139, 179, 0.22), transparent 60%),
+      linear-gradient(170deg, var(--bg-1), var(--bg-2));
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+    z-index: 0;
+  }
+
+  header {
+    position: relative; z-index: 2;
+    text-align: center;
+    padding: 28px 16px 6px;
+  }
+
+  h1 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(34px, 5vw, 56px);
+    margin: 0;
+    letter-spacing: 0.02em;
+    background: linear-gradient(100deg, var(--gold-1) 0%, var(--gold-2) 35%, var(--pink-2) 65%, var(--pink-1) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 30px rgba(243, 204, 98, 0.15);
+  }
+
+  h1 em { font-style: italic; font-weight: 500; }
+
+  .tagline {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  main {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr minmax(260px, 320px);
+    gap: 24px;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 10px 24px 40px;
+  }
+
+  /* ---------- 3D stage ---------- */
+  .stage {
+    position: relative;
+    height: calc(var(--size) * 0.82 + 80px);
+    /* projected board height follows the tilt in browsers with CSS trig functions */
+    height: calc((var(--size) + var(--frame) * 2) * cos(var(--tilt)) + var(--thick) * sin(var(--tilt)) + 110px);
+    transition: height 0.35s cubic-bezier(.2,.7,.2,1);
+    display: grid;
+    place-items: center;
+    perspective: 1500px;
+    perspective-origin: 50% 20%;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  .board-wrap {
+    position: relative;
+    width: calc(var(--size) + var(--frame) * 2);
+    height: calc(var(--size) + var(--frame) * 2);
+    transform-style: preserve-3d;
+    transform: rotateX(var(--tilt)) rotateZ(var(--spin));
+    transition: transform 0.35s cubic-bezier(.2,.7,.2,1);
+    will-change: transform;
+  }
+
+  /* ground shadow */
+  .board-shadow {
+    position: absolute; inset: -6%;
+    border-radius: 24px;
+    background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.55), rgba(0,0,0,0.25) 55%, transparent 75%);
+    transform: translateZ(calc(var(--thick) * -1.6));
+    filter: blur(14px);
+  }
+
+  .side {
+    position: absolute;
+    background: linear-gradient(180deg, var(--wine-1), var(--wine-2) 60%, var(--wine-3));
+    box-shadow: inset 0 0 0 1px rgba(243,204,98,0.25);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .side::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 9px);
+  }
+  .side.front { left: 0; top: 100%; width: 100%; height: var(--thick); transform-origin: top center; transform: rotateX(-90deg); }
+  .side.back  { left: 0; bottom: 100%; width: 100%; height: var(--thick); transform-origin: bottom center; transform: rotateX(90deg); filter: brightness(0.75); }
+  .side.left  { top: 0; right: 100%; width: var(--thick); height: 100%; transform-origin: center right; transform: rotateY(-90deg); filter: brightness(0.8); }
+  .side.right { top: 0; left: 100%; width: var(--thick); height: 100%; transform-origin: center left; transform: rotateY(90deg); filter: brightness(0.85); }
+
+  .frame {
+    position: absolute; inset: 0;
+    padding: var(--frame);
+    border-radius: 6px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.08), transparent 40%),
+      linear-gradient(160deg, #7b2d58, #4d1838 55%, #3a1029);
+    box-shadow:
+      inset 0 0 0 2px rgba(243,204,98,0.7),
+      inset 0 0 0 5px rgba(60,16,44,1),
+      inset 0 0 0 6px rgba(243,204,98,0.35),
+      0 0 0 1px rgba(255,241,189,0.45);
+    transform-style: preserve-3d;
+  }
+
+  .frame .inner-trim {
+    position: absolute; inset: calc(var(--frame) - 4px);
+    border: 2px solid var(--gold-3);
+    box-shadow: 0 0 0 1px rgba(255,241,189,0.6), inset 0 0 12px rgba(0,0,0,0.5);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  /* coordinates */
+  .coords {
+    position: absolute; pointer-events: none;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: calc(var(--frame) * 0.5);
+    font-weight: 600;
+    color: var(--gold-2);
+    letter-spacing: 0.05em;
+    display: grid;
+  }
+  .coords.files { left: var(--frame); right: var(--frame); bottom: 0; height: var(--frame); grid-auto-flow: column; }
+  .coords.ranks { top: var(--frame); bottom: var(--frame); left: 0; width: var(--frame); }
+  .coords span { display: grid; place-items: center; }
+
+  .board {
+    position: relative;
+    width: var(--size); height: var(--size);
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    transform-style: preserve-3d;
+  }
+
+  .sq {
+    position: relative;
+    cursor: default;
+    transition: filter 0.2s;
+  }
+  .sq.gold {
+    background:
+      radial-gradient(120% 90% at 20% 15%, rgba(255,255,255,0.45), transparent 50%),
+      linear-gradient(150deg, var(--gold-1) 0%, var(--gold-2) 45%, var(--gold-3) 100%);
+    box-shadow: inset 0 0 0 1px rgba(168,115,31,0.35), inset 0 -3px 6px rgba(168,115,31,0.35), inset 0 3px 6px rgba(255,255,255,0.35);
+  }
+  .sq.pink {
+    background:
+      radial-gradient(120% 90% at 20% 15%, rgba(255,255,255,0.3), transparent 50%),
+      linear-gradient(150deg, var(--pink-1) 0%, var(--pink-2) 45%, var(--pink-3) 100%);
+    box-shadow: inset 0 0 0 1px rgba(168,51,106,0.4), inset 0 -3px 6px rgba(168,51,106,0.45), inset 0 3px 6px rgba(255,255,255,0.25);
+  }
+  .sq.last { filter: brightness(1.08) saturate(1.15); }
+
+  .sq.move, .sq.cap { cursor: pointer; }
+  .sq.move::after, .sq.cap::after {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 34%; height: 34%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,241,189,0.95), rgba(243,204,98,0.6) 60%, transparent 70%);
+    box-shadow: 0 0 18px 6px rgba(255,241,189,0.45);
+    animation: pulse 1.3s ease-in-out infinite;
+  }
+  .sq.cap::after {
+    width: 62%; height: 62%;
+    background: transparent;
+    border: 4px solid rgba(255,241,189,0.95);
+    box-shadow: 0 0 20px 6px rgba(255,120,170,0.6), inset 0 0 16px rgba(255,241,189,0.6);
+  }
+  @keyframes pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+    50% { transform: translate(-50%, -50%) scale(1.18); opacity: 1; }
+  }
+
+  /* ---------- pieces ---------- */
+  .pieces {
+    position: absolute;
+    left: var(--frame); top: var(--frame);
+    width: var(--size); height: var(--size);
+    transform-style: preserve-3d;
+    pointer-events: none;
+  }
+
+  .piece {
+    position: absolute;
+    width: var(--sq); height: var(--sq);
+    left: calc(var(--c) * var(--sq));
+    top: calc(var(--r) * var(--sq));
+    transform-style: preserve-3d;
+    transition: left 0.42s cubic-bezier(.3,.8,.3,1), top 0.42s cubic-bezier(.3,.8,.3,1), transform 0.25s ease;
+    pointer-events: auto;
+    cursor: default;
+  }
+  .piece.own { cursor: pointer; }
+  .piece.sel { transform: translateZ(20px); }
+  .piece.captured {
+    animation: vanish 0.45s ease forwards;
+    pointer-events: none;
+  }
+  @keyframes vanish {
+    to { transform: translateZ(60px) scale(0.3) rotateZ(40deg); opacity: 0; }
+  }
+
+  .piece .layer {
+    position: absolute; inset: 11%;
+    border-radius: 50%;
+  }
+  .piece .layer:nth-child(1) { transform: translateZ(0px); }
+  .piece .layer:nth-child(2) { transform: translateZ(2.5px); }
+  .piece .layer:nth-child(3) { transform: translateZ(5px); }
+  .piece .layer:nth-child(4) { transform: translateZ(7.5px); }
+  .piece .layer:nth-child(5) { transform: translateZ(10px); }
+  .piece .layer:nth-child(6) { transform: translateZ(12.5px); }
+  .piece .cap { transform: translateZ(var(--pz)); display: grid; place-items: center; }
+
+  .piece .layer:nth-child(1) { box-shadow: 0 10px 22px rgba(0,0,0,0.55); }
+
+  /* pearl pieces */
+  .piece.P .layer { background: linear-gradient(180deg, #e9dde6, #bfaebc); }
+  .piece.P .cap {
+    background:
+      radial-gradient(circle at 35% 30%, #ffffff 0%, #f7eef4 30%, #d9c9d6 70%, #b9a6b7 100%);
+    box-shadow:
+      inset 0 0 0 2px rgba(243,204,98,0.85),
+      inset 0 0 0 5px rgba(255,255,255,0.6),
+      inset 0 0 0 7px rgba(243,204,98,0.55),
+      inset 0 -6px 10px rgba(120,90,120,0.25);
+  }
+  /* onyx pieces */
+  .piece.O .layer { background: linear-gradient(180deg, #2a1d2e, #120a16); }
+  .piece.O .cap {
+    background:
+      radial-gradient(circle at 35% 30%, #5e4a62 0%, #33243a 35%, #1a1020 75%, #0d0710 100%);
+    box-shadow:
+      inset 0 0 0 2px rgba(243,204,98,0.9),
+      inset 0 0 0 5px rgba(0,0,0,0.5),
+      inset 0 0 0 7px rgba(243,204,98,0.5),
+      inset 0 -6px 10px rgba(0,0,0,0.5);
+  }
+
+  .piece .cap .crown {
+    width: 52%; height: 52%;
+    opacity: 0;
+    transform: scale(0.4);
+    transition: opacity 0.3s, transform 0.4s cubic-bezier(.2,1.4,.4,1);
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+  }
+  .piece.king .cap .crown { opacity: 1; transform: scale(1); }
+
+  .piece.sel .cap { box-shadow: inset 0 0 0 2px rgba(243,204,98,1), inset 0 0 0 5px rgba(255,255,255,0.7), 0 0 24px 6px rgba(255,241,189,0.6); }
+  .piece.own:not(.sel):hover { transform: translateZ(8px); }
+
+  /* ---------- panel ---------- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid rgba(243,204,98,0.3);
+    border-radius: 18px;
+    padding: 22px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  .turn {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(243,204,98,0.14), rgba(245,139,179,0.14));
+    border: 1px solid rgba(255,241,189,0.25);
+  }
+  .turn .dot {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    box-shadow: inset 0 0 0 2px var(--gold-2), 0 4px 10px rgba(0,0,0,0.4);
+  }
+  .turn .dot.P { background: radial-gradient(circle at 35% 30%, #fff, #c9b8c7); }
+  .turn .dot.O { background: radial-gradient(circle at 35% 30%, #5e4a62, #0d0710); }
+  .turn .label { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .turn .who { font-family: "Cormorant Garamond", Georgia, serif; font-size: 26px; font-weight: 700; line-height: 1.05; }
+  .turn .note { font-size: 12px; color: var(--muted); margin-top: 2px; min-height: 1.2em; }
+
+  .score {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .score .card {
+    border-radius: 12px; padding: 12px 14px;
+    background: rgba(0,0,0,0.22);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .score .name { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+  .score .num { font-family: "Cormorant Garamond", Georgia, serif; font-size: 32px; font-weight: 700; line-height: 1; margin-top: 4px; }
+  .score .sub { font-size: 11px; color: var(--muted); }
+
+  .controls { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  button, select {
+    font: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(243,204,98,0.4);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  }
+  button:hover, select:hover { background: rgba(243,204,98,0.14); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary {
+    background: linear-gradient(135deg, var(--gold-2), var(--pink-2));
+    color: #2a0b1e;
+    border-color: transparent;
+    box-shadow: 0 6px 18px rgba(245,139,179,0.35);
+  }
+  button.primary:hover { filter: brightness(1.06); }
+  select { appearance: none; -webkit-appearance: none; padding-right: 28px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--gold-2) 50%), linear-gradient(135deg, var(--gold-2) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
+    background-size: 5px 5px; background-repeat: no-repeat; }
+  select option { color: #2a0b1e; }
+
+  label.field { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  input[type=range] {
+    width: 100%; accent-color: var(--gold-2);
+  }
+
+  .rules {
+    font-size: 12.5px; line-height: 1.5; color: var(--muted);
+    border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
+  }
+  .rules b { color: var(--ink); }
+
+  /* ---------- overlay ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: grid; place-items: center;
+    background: rgba(20, 5, 16, 0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .modal {
+    text-align: center;
+    padding: 36px 40px;
+    border-radius: 22px;
+    background: linear-gradient(160deg, rgba(123,45,88,0.9), rgba(58,16,41,0.95));
+    border: 1px solid rgba(243,204,98,0.6);
+    box-shadow: 0 30px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+    transform: translateY(16px) scale(0.96);
+    transition: transform 0.4s cubic-bezier(.2,1.2,.3,1);
+    max-width: 360px;
+  }
+  .overlay.show .modal { transform: none; }
+  .modal h2 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 40px; margin: 0 0 6px;
+    background: linear-gradient(100deg, var(--gold-1), var(--gold-2), var(--pink-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .modal p { margin: 0 0 22px; color: var(--muted); }
+
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 900px) {
+    :root { --size: min(92vw, 58vh); --thick: 22px; }
+    main { grid-template-columns: 1fr; padding: 6px 16px 32px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .piece, .board-wrap { transition: none; }
+    .sq.move::after, .sq.cap::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rosé <em>&amp;</em> Gold Checkers</h1>
+  <p class="tagline">Pearl versus Onyx</p>
+</header>
+
+<main>
+  <section class="stage" id="stage" aria-label="Checkers board">
+    <div class="board-wrap" id="boardWrap">
+      <div class="board-shadow"></div>
+      <div class="side front"></div>
+      <div class="side back"></div>
+      <div class="side left"></div>
+      <div class="side right"></div>
+      <div class="frame">
+        <div class="inner-trim"></div>
+        <div class="coords files" aria-hidden="true">
+          <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+        </div>
+        <div class="coords ranks" aria-hidden="true">
+          <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+        </div>
+        <div class="board" id="board" role="grid"></div>
+      </div>
+      <div class="pieces" id="pieces"></div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="turn" id="turnBox">
+      <div class="dot P" id="turnDot"></div>
+      <div>
+        <div class="label">To move</div>
+        <div class="who" id="turnWho">Pearl</div>
+        <div class="note" id="turnNote"></div>
+      </div>
+    </div>
+
+    <div class="score">
+      <div class="card">
+        <div class="name">Pearl</div>
+        <div class="num" id="pearlCount">12</div>
+        <div class="sub">pieces on board</div>
+      </div>
+      <div class="card">
+        <div class="name">Onyx</div>
+        <div class="num" id="onyxCount">12</div>
+        <div class="sub">pieces on board</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <label class="field">Opponent
+          <select id="modeSel">
+            <option value="ai">Computer</option>
+            <option value="2p">Two players</option>
+          </select>
+        </label>
+        <label class="field">Strength
+          <select id="levelSel">
+            <option value="2">Gentle</option>
+            <option value="4" selected>Spirited</option>
+            <option value="6">Ruthless</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">Board tilt
+        <input type="range" id="tilt" min="0" max="64" value="50" aria-label="Board tilt">
+      </label>
+      <div class="row">
+        <button id="undoBtn">Undo</button>
+        <button id="newBtn" class="primary">New game</button>
+      </div>
+    </div>
+
+    <div class="rules">
+      <b>How to play.</b> Pearl moves first. Pieces slide diagonally on the pink squares.
+      Captures are mandatory and chain together. Reach the far row to be crowned a king, which moves both ways.
+    </div>
+  </aside>
+</main>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+  <div class="modal">
+    <h2 id="ovTitle">Pearl wins</h2>
+    <p id="ovText">A flawless finish.</p>
+    <div class="row">
+      <button id="ovUndo">Take back</button>
+      <button class="primary" id="ovBtn">Play again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Game model ----------
+  const N = 8;
+  const PEARL = 'P', ONYX = 'O';
+  const NAMES = { P: 'Pearl', O: 'Onyx' };
+  const opp = c => (c === PEARL ? ONYX : PEARL);
+  const inB = (r, c) => r >= 0 && r < N && c >= 0 && c < N;
+  let nextId = 1;
+
+  function initBoard() {
+    const b = Array.from({ length: N }, () => Array(N).fill(null));
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if ((r + c) % 2 !== 1) continue;
+      if (r < 3) b[r][c] = { color: ONYX, king: false, id: nextId++ };
+      else if (r > 4) b[r][c] = { color: PEARL, king: false, id: nextId++ };
+    }
+    return b;
+  }
+
+  const cloneBoard = b => b.map(row => row.map(p => (p ? { ...p } : null)));
+
+  function dirsFor(p) {
+    if (p.king) return [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+    return p.color === PEARL ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+  }
+  const promotes = (p, r) => !p.king && (p.color === PEARL ? r === 0 : r === N - 1);
+
+  // All capture sequences for a piece starting at (r,c). `board` must have the
+  // origin square emptied so the piece may circle back onto it.
+  function captureSeqs(board, r, c, piece, taken) {
+    const seqs = [];
+    for (const [dr, dc] of dirsFor(piece)) {
+      const mr = r + dr, mc = c + dc, tr = r + 2 * dr, tc = c + 2 * dc;
+      if (!inB(tr, tc)) continue;
+      const mid = board[mr][mc];
+      if (!mid || mid.color === piece.color || board[tr][tc]) continue;
+      if (taken.some(t => t[0] === mr && t[1] === mc)) continue;
+      const step = { to: [tr, tc], cap: [mr, mc] };
+      const rest = promotes(piece, tr) ? [] : captureSeqs(board, tr, tc, piece, [...taken, [mr, mc]]);
+      if (rest.length) rest.forEach(s => seqs.push([step, ...s]));
+      else seqs.push([step]);
+    }
+    return seqs;
+  }
+
+  // Legal moves: full sequences. Captures are mandatory.
+  function allMoves(board, color) {
+    const caps = [], simple = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const p = board[r][c];
+      if (!p || p.color !== color) continue;
+      const b2 = board.map(row => row.slice());
+      b2[r][c] = null;
+      for (const s of captureSeqs(b2, r, c, p, [])) caps.push({ from: [r, c], steps: s });
+      if (caps.length) continue;
+      for (const [dr, dc] of dirsFor(p)) {
+        const nr = r + dr, nc = c + dc;
+        if (inB(nr, nc) && !board[nr][nc]) simple.push({ from: [r, c], steps: [{ to: [nr, nc], cap: null }] });
+      }
+    }
+    return caps.length ? caps : simple;
+  }
+
+  // Mutates board. Returns true if the piece was crowned.
+  function applyStep(board, from, step) {
+    const [fr, fc] = from, [tr, tc] = step.to;
+    const p = board[fr][fc];
+    board[fr][fc] = null;
+    if (step.cap) board[step.cap[0]][step.cap[1]] = null;
+    const crowned = promotes(p, tr);
+    board[tr][tc] = crowned ? { ...p, king: true } : p;
+    return crowned;
+  }
+
+  function applyMove(board, move) {
+    const b = cloneBoard(board);
+    let from = move.from;
+    for (const s of move.steps) { applyStep(b, from, s); from = s.to; }
+    return b;
+  }
+
+  // ---------- AI ----------
+  function evaluate(board, color) {
+    let score = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      let v;
+      if (p.king) v = 175;
+      else {
+        const adv = p.color === PEARL ? (N - 1 - r) : r;
+        v = 100 + adv * 4;
+        const backRow = p.color === PEARL ? N - 1 : 0;
+        if (r === backRow) v += 6;
+      }
+      if (c >= 2 && c <= 5 && r >= 2 && r <= 5) v += 3;
+      score += p.color === color ? v : -v;
+    }
+    return score;
+  }
+
+  function search(board, color, depth, alpha, beta) {
+    const moves = allMoves(board, color);
+    if (!moves.length) return -100000 - depth;
+    if (depth <= 0) return evaluate(board, color);
+    let best = -Infinity;
+    for (const m of moves) {
+      const next = applyMove(board, m);
+      // extend captures slightly so the search does not stop mid-exchange
+      const ext = m.steps[0].cap && depth === 1 ? 1 : 0;
+      const v = -search(next, opp(color), depth - 1 + ext, -beta, -alpha);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  function chooseMove(board, color, depth) {
+    const moves = allMoves(board, color);
+    if (!moves.length) return null;
+    if (moves.length === 1) return moves[0];
+    let best = -Infinity, pool = [];
+    for (const m of moves) {
+      const v = -search(applyMove(board, m), opp(color), depth - 1, -Infinity, Infinity)
+        + (depth <= 2 ? Math.random() * 40 : Math.random() * 2);
+      if (v > best + 1e-9) { best = v; pool = [m]; }
+      else if (Math.abs(v - best) < 1e-9) pool.push(m);
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // ---------- State ----------
+  const S = {
+    board: null,
+    turn: PEARL,
+    moves: [],
+    selected: null,
+    locked: null,
+    lastMove: [],
+    history: [],
+    over: false,
+    busy: false,
+    quietPlies: 0,
+    mode: 'ai',
+    level: 4,
+  };
+  const AI_COLOR = ONYX;
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const boardEl = $('board'), piecesEl = $('pieces'), stageEl = $('stage');
+  const sqEls = [];
+  const pieceEls = new Map();
+
+  (function buildSquares() {
+    const files = 'abcdefgh';
+    for (let r = 0; r < N; r++) {
+      sqEls[r] = [];
+      for (let c = 0; c < N; c++) {
+        const d = document.createElement('div');
+        d.className = 'sq ' + ((r + c) % 2 === 1 ? 'pink' : 'gold');
+        d.dataset.r = r; d.dataset.c = c;
+        d.setAttribute('role', 'gridcell');
+        d.setAttribute('aria-label', files[c] + (N - r));
+        d.addEventListener('click', () => onSquare(r, c));
+        boardEl.appendChild(d);
+        sqEls[r][c] = d;
+      }
+    }
+  })();
+
+  const CROWN = '<svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.5h18L19.6 8.6l-4.4 3.9L12 5.5l-3.2 7-4.4-3.9z" fill="#f3cc62" stroke="#a8731f" stroke-width="1" stroke-linejoin="round"/><rect x="4" y="18.5" width="16" height="2" rx="1" fill="#f3cc62" stroke="#a8731f" stroke-width="0.6"/></svg>';
+
+  function makePieceEl(p) {
+    const el = document.createElement('div');
+    el.className = 'piece ' + p.color;
+    el.innerHTML = '<div class="layer"></div>'.repeat(6) + '<div class="layer cap">' + CROWN + '</div>';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      onSquare(+el.dataset.r, +el.dataset.c);
+    });
+    return el;
+  }
+
+  function render() {
+    const seen = new Set();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const p = S.board[r][c];
+      if (!p) continue;
+      seen.add(p.id);
+      let el = pieceEls.get(p.id);
+      if (!el) { el = makePieceEl(p); pieceEls.set(p.id, el); piecesEl.appendChild(el); }
+      el.style.setProperty('--r', r);
+      el.style.setProperty('--c', c);
+      el.dataset.r = r; el.dataset.c = c;
+      el.classList.toggle('king', !!p.king);
+      const own = !S.over && !S.busy && p.color === S.turn && !(S.mode === 'ai' && S.turn === AI_COLOR)
+        && S.moves.some(m => m.from[0] === r && m.from[1] === c);
+      el.classList.toggle('own', own);
+      el.classList.toggle('sel', !!S.selected && S.selected[0] === r && S.selected[1] === c);
+    }
+    for (const [id, el] of pieceEls) {
+      if (seen.has(id)) continue;
+      pieceEls.delete(id);
+      el.classList.add('captured');
+      el.classList.remove('sel', 'own');
+      setTimeout(() => el.remove(), 500);
+    }
+
+    // square highlights
+    const targets = new Map();
+    if (S.selected) {
+      for (const m of S.moves) {
+        if (m.from[0] !== S.selected[0] || m.from[1] !== S.selected[1]) continue;
+        const s = m.steps[0];
+        targets.set(s.to[0] * N + s.to[1], !!s.cap);
+      }
+    }
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const el = sqEls[r][c];
+      const t = targets.get(r * N + c);
+      el.classList.toggle('move', t === false);
+      el.classList.toggle('cap', t === true);
+      el.classList.toggle('last', S.lastMove.some(q => q[0] === r && q[1] === c));
+    }
+
+    // panel
+    let pearl = 0, onyx = 0;
+    for (const row of S.board) for (const p of row) if (p) (p.color === PEARL ? pearl++ : onyx++);
+    $('pearlCount').textContent = pearl;
+    $('onyxCount').textContent = onyx;
+    $('turnDot').className = 'dot ' + S.turn;
+    $('turnWho').textContent = NAMES[S.turn];
+    const note = $('turnNote');
+    if (S.over) note.textContent = 'Game over';
+    else if (S.busy) note.textContent = 'Thinking…';
+    else if (S.locked) note.textContent = 'Keep jumping!';
+    else if (S.moves.length && S.moves[0].steps[0].cap) note.textContent = 'A capture is available and required.';
+    else note.textContent = S.mode === 'ai' && S.turn === AI_COLOR ? 'Computer' : (S.mode === 'ai' ? 'Your move' : '');
+    $('undoBtn').disabled = S.busy || !S.history.length;
+  }
+
+  // ---------- Turn flow ----------
+  function startTurn() {
+    S.selected = null;
+    S.locked = null;
+    S.moves = allMoves(S.board, S.turn);
+    if (!S.moves.length) return endGame(opp(S.turn), NAMES[S.turn] + ' has no moves left.');
+    if (S.quietPlies >= 80) return endGame(null, 'Forty moves without a capture or a soldier advancing.');
+    S.history.push({ board: cloneBoard(S.board), turn: S.turn, quietPlies: S.quietPlies, lastMove: S.lastMove.slice() });
+    if (S.history.length > 200) S.history.shift();
+    render();
+    if (S.mode === 'ai' && S.turn === AI_COLOR) scheduleAI();
+  }
+
+  function finishTurn(movedKing, captured) {
+    S.quietPlies = (captured || !movedKing) ? 0 : S.quietPlies + 1;
+    S.turn = opp(S.turn);
+    startTurn();
+  }
+
+  function doStep(from, step) {
+    const piece = S.board[from[0]][from[1]];
+    const wasKing = piece.king;
+    const crowned = applyStep(S.board, from, step);
+    S.lastMove = [from, step.to];
+    const rest = S.moves
+      .filter(m => m.from[0] === from[0] && m.from[1] === from[1] && m.steps[0].to[0] === step.to[0] && m.steps[0].to[1] === step.to[1])
+      .map(m => ({ from: step.to, steps: m.steps.slice(1) }))
+      .filter(m => m.steps.length);
+    if (step.cap && rest.length && !crowned) {
+      S.moves = rest;
+      S.locked = step.to;
+      S.selected = step.to;
+      render();
+      return false;
+    }
+    finishTurn(wasKing, !!step.cap);
+    return true;
+  }
+
+  function onSquare(r, c) {
+    if (S.over || S.busy) return;
+    if (S.mode === 'ai' && S.turn === AI_COLOR) return;
+    const p = S.board[r][c];
+    if (S.selected) {
+      const m = S.moves.find(mv => mv.from[0] === S.selected[0] && mv.from[1] === S.selected[1] && mv.steps[0].to[0] === r && mv.steps[0].to[1] === c);
+      if (m) { doStep(S.selected, m.steps[0]); return; }
+    }
+    if (S.locked) return; // mid-jump: only the jumping piece may move
+    if (p && p.color === S.turn && S.moves.some(mv => mv.from[0] === r && mv.from[1] === c)) {
+      S.selected = (S.selected && S.selected[0] === r && S.selected[1] === c) ? null : [r, c];
+    } else {
+      S.selected = null;
+    }
+    render();
+  }
+
+  function scheduleAI() {
+    S.busy = true;
+    render();
+    setTimeout(() => {
+      const move = chooseMove(S.board, AI_COLOR, S.level);
+      if (!move) { S.busy = false; return startTurn(); }
+      S.selected = move.from;
+      render();
+      let i = 0, from = move.from;
+      const play = () => {
+        if (S.over || S.turn !== AI_COLOR) { S.busy = false; return; }
+        const step = move.steps[i++];
+        const last = i === move.steps.length;
+        if (last) S.busy = false;
+        const done = doStep(from, step);
+        from = step.to;
+        if (!done && !last) setTimeout(play, 520);
+        else if (!done && last) { S.busy = false; render(); }
+      };
+      setTimeout(play, 380);
+    }, 420);
+  }
+
+  function endGame(winner, reason) {
+    S.over = true;
+    S.busy = false;
+    S.selected = null;
+    render();
+    $('ovTitle').textContent = winner ? NAMES[winner] + ' wins' : 'A draw';
+    $('ovText').textContent = reason;
+    $('overlay').classList.add('show');
+  }
+
+  function newGame() {
+    $('overlay').classList.remove('show');
+    for (const el of pieceEls.values()) el.remove();
+    pieceEls.clear();
+    S.board = initBoard();
+    S.turn = PEARL;
+    S.history = [];
+    S.lastMove = [];
+    S.over = false;
+    S.busy = false;
+    S.quietPlies = 0;
+    startTurn();
+  }
+
+  function undo() {
+    if (S.busy || !S.history.length) return;
+    let snap = S.history.pop();
+    // In computer mode, rewind to the start of the human's last turn.
+    if (S.mode === 'ai') {
+      while (snap.turn === AI_COLOR && S.history.length) snap = S.history.pop();
+      if (snap.turn === AI_COLOR) { S.history.push(snap); return; }
+    }
+    $('overlay').classList.remove('show');
+    S.board = cloneBoard(snap.board);
+    S.turn = snap.turn;
+    S.quietPlies = snap.quietPlies;
+    S.lastMove = snap.lastMove;
+    S.over = false;
+    S.history.push(snap);
+    S.selected = null;
+    S.locked = null;
+    S.moves = allMoves(S.board, S.turn);
+    render();
+  }
+
+  // ---------- Controls ----------
+  $('newBtn').addEventListener('click', newGame);
+  $('ovBtn').addEventListener('click', newGame);
+  $('ovUndo').addEventListener('click', undo);
+  $('undoBtn').addEventListener('click', undo);
+  $('modeSel').addEventListener('change', e => { S.mode = e.target.value; newGame(); });
+  $('levelSel').addEventListener('change', e => { S.level = +e.target.value; });
+
+  const tiltInput = $('tilt');
+  let baseTilt = +tiltInput.value, px = 0, py = 0;
+  const applyView = () => {
+    const tilt = Math.max(0, Math.min(70, baseTilt + py * -4));
+    stageEl.style.setProperty('--tilt', tilt + 'deg');
+    stageEl.style.setProperty('--spin', (px * 5) + 'deg');
+  };
+  tiltInput.addEventListener('input', () => { baseTilt = +tiltInput.value; applyView(); });
+  stageEl.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    const b = stageEl.getBoundingClientRect();
+    px = ((e.clientX - b.left) / b.width - 0.5) * 2;
+    py = ((e.clientY - b.top) / b.height - 0.5) * 2;
+    applyView();
+  });
+  stageEl.addEventListener('pointerleave', () => { px = 0; py = 0; applyView(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && S.selected && !S.locked) { S.selected = null; render(); }
+    if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+  });
+
+  applyView();
+  newGame();
+})();
+</script>
+</body>
+</html>
