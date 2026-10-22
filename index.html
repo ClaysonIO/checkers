@@ -518,6 +518,7 @@
     </label>
     <label class="toggle">Sound effects <input type="checkbox" id="soundChk" checked></label>
     <label class="toggle">Turn the board to each player <input type="checkbox" id="turnChk" checked></label>
+    <label class="toggle">Jumps are required <input type="checkbox" id="forceChk" checked></label>
     <button id="fsBtn">Full screen</button>
     <div class="row">
       <button id="undoBtn">Undo</button>
@@ -526,7 +527,8 @@
     <div class="rules">
       <b>How to play.</b> Lay the phone flat between you: Pearl sits at the bottom, Onyx at the top,
       and the board leans toward whoever is to move. Pearl moves first. Pieces slide diagonally on the pink squares.
-      Captures are mandatory and chain together. Reach the far row to be crowned a king, which moves both ways.
+      Captures chain together and are mandatory, unless you switch off “Jumps are required”: then any jump,
+      or any part of a chain, may be passed up. Reach the far row to be crowned a king, which moves both ways.
     </div>
   </div>
 </div>
@@ -590,22 +592,31 @@
     return seqs;
   }
 
-  // Legal moves: full sequences. Captures are mandatory.
+  // Legal moves: full sequences. Captures are mandatory unless the house rule
+  // makes them optional, in which case every prefix of a chain is a move too.
   function allMoves(board, color) {
-    const caps = [], simple = [];
+    const forced = prefs.forcedJumps;
+    const caps = [], simple = [], seen = new Set();
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
       const p = board[r][c];
       if (!p || p.color !== color) continue;
       const b2 = board.map(row => row.slice());
       b2[r][c] = null;
-      for (const s of captureSeqs(b2, r, c, p, [])) caps.push({ from: [r, c], steps: s });
-      if (caps.length) continue;
+      for (const s of captureSeqs(b2, r, c, p, [])) {
+        if (forced) { caps.push({ from: [r, c], steps: s }); continue; }
+        for (let n = 1; n <= s.length; n++) {
+          const steps = s.slice(0, n);
+          const key = r + ',' + c + ':' + steps.map(t => t.to.join(',')).join(';');
+          if (!seen.has(key)) { seen.add(key); caps.push({ from: [r, c], steps }); }
+        }
+      }
+      if (forced && caps.length) continue;
       for (const [dr, dc] of dirsFor(p)) {
         const nr = r + dr, nc = c + dc;
         if (inB(nr, nc) && !board[nr][nc]) simple.push({ from: [r, c], steps: [{ to: [nr, nc], cap: null }] });
       }
     }
-    return caps.length ? caps : simple;
+    return forced && caps.length ? caps : caps.concat(simple);
   }
 
   // Mutates board. Returns true if the piece was crowned.
@@ -751,7 +762,7 @@
 
   // ---------- Settings ----------
   const PREFS_KEY = 'roseGoldCheckers.prefs';
-  const prefs = { mode: '2p', level: 4, tilt: 36, sound: true, turnBoard: true };
+  const prefs = { mode: '2p', level: 4, tilt: 36, sound: true, turnBoard: true, forcedJumps: true };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY)) || {}); } catch (e) { /* storage unavailable */ }
   const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ } };
   Sound.enabled = prefs.sound;
@@ -763,11 +774,13 @@
     moves: [],
     selected: null,
     locked: null,
+    canStop: false,
     lastMove: [],
     history: [],
     over: false,
     busy: false,
     quietPlies: 0,
+    result: null,
     mode: prefs.mode,
     level: prefs.level,
   };
@@ -863,8 +876,8 @@
       if (S.over) note = 'Game over';
       else if (!active) note = '';
       else if (S.busy) note = 'Thinking…';
-      else if (S.locked) note = 'Keep jumping!';
-      else if (S.moves.length && S.moves[0].steps[0].cap) note = 'Capture required';
+      else if (S.locked) note = S.canStop ? 'Jump again or tap to stop' : 'Keep jumping!';
+      else if (prefs.forcedJumps && S.moves.length && S.moves[0].steps[0].cap) note = 'Capture required';
       else note = 'Your move';
       $('note' + color).textContent = note;
     }
@@ -876,11 +889,13 @@
   function startTurn() {
     S.selected = null;
     S.locked = null;
+    S.canStop = false;
     S.moves = allMoves(S.board, S.turn);
     if (!S.moves.length) return endGame(opp(S.turn), NAMES[S.turn] + ' has no moves left.');
     if (S.quietPlies >= 80) return endGame(null, 'Forty moves without a capture or a soldier advancing.');
     S.history.push({ board: cloneBoard(S.board), turn: S.turn, quietPlies: S.quietPlies, lastMove: S.lastMove.slice() });
     if (S.history.length > 200) S.history.shift();
+    saveGame();
     render();
     if (S.mode === 'ai' && S.turn === AI_COLOR) scheduleAI();
   }
@@ -891,7 +906,9 @@
     startTurn();
   }
 
-  function doStep(from, step) {
+  // `final` ends the turn even if the chain could go on (the computer stopping
+  // a chain early under optional jumps).
+  function doStep(from, step, final) {
     const piece = S.board[from[0]][from[1]];
     const wasKing = piece.king;
     const crowned = applyStep(S.board, from, step);
@@ -903,10 +920,13 @@
       .filter(m => m.from[0] === from[0] && m.from[1] === from[1] && m.steps[0].to[0] === step.to[0] && m.steps[0].to[1] === step.to[1])
       .map(m => ({ from: step.to, steps: m.steps.slice(1) }))
       .filter(m => m.steps.length);
-    if (step.cap && rest.length && !crowned) {
+    if (step.cap && rest.length && !crowned && !final) {
+      S.canStop = S.moves.some(m => m.from[0] === from[0] && m.from[1] === from[1]
+        && m.steps.length === 1 && m.steps[0].to[0] === step.to[0] && m.steps[0].to[1] === step.to[1]);
       S.moves = rest;
       S.locked = step.to;
       S.selected = step.to;
+      saveGame();
       render();
       return false;
     }
@@ -922,7 +942,11 @@
       const m = S.moves.find(mv => mv.from[0] === S.selected[0] && mv.from[1] === S.selected[1] && mv.steps[0].to[0] === r && mv.steps[0].to[1] === c);
       if (m) { doStep(S.selected, m.steps[0]); return; }
     }
-    if (S.locked) return; // mid-jump: only the jumping piece may move
+    if (S.locked) {
+      // mid-jump: only the jumping piece may move, or stop if jumps are optional
+      if (S.canStop && r === S.locked[0] && c === S.locked[1]) finishTurn(p.king, true);
+      return;
+    }
     if (p && p.color === S.turn && S.moves.some(mv => mv.from[0] === r && mv.from[1] === c)) {
       S.selected = (S.selected && S.selected[0] === r && S.selected[1] === c) ? null : [r, c];
     } else {
@@ -945,7 +969,7 @@
         const step = move.steps[i++];
         const last = i === move.steps.length;
         if (last) S.busy = false;
-        const done = doStep(from, step);
+        const done = doStep(from, step, last);
         from = step.to;
         if (!done && !last) setTimeout(play, 520);
         else if (!done && last) { S.busy = false; render(); }
@@ -956,6 +980,8 @@
 
   function endGame(winner, reason) {
     S.over = true;
+    S.result = { winner, reason };
+    saveGame();
     S.busy = false;
     S.selected = null;
     render();
@@ -985,6 +1011,9 @@
 
   function undo() {
     if (S.busy || !S.history.length) return;
+    // At the start of a turn the last snapshot is that same turn: step past it,
+    // so undo takes back the previous move rather than doing nothing.
+    if (!S.locked && !S.over && S.history.length > 1) S.history.pop();
     let snap = S.history.pop();
     // In computer mode, rewind to the start of the human's last turn.
     if (S.mode === 'ai') {
@@ -1000,8 +1029,66 @@
     S.history.push(snap);
     S.selected = null;
     S.locked = null;
+    S.canStop = false;
     S.moves = allMoves(S.board, S.turn);
+    saveGame();
     render();
+  }
+
+  // ---------- Saved game ----------
+  // The game is saved at the start of every turn, after each jump of a chain and
+  // when it ends, so a refresh picks up exactly where play left off.
+  const GAME_KEY = 'roseGoldCheckers.game';
+  function saveGame() {
+    const g = { board: S.board, turn: S.turn, quietPlies: S.quietPlies, lastMove: S.lastMove,
+      history: S.history, locked: S.locked, canStop: S.canStop, over: S.over, result: S.over ? S.result : null };
+    try { localStorage.setItem(GAME_KEY, JSON.stringify(g)); } catch (e) { /* storage unavailable or full */ }
+  }
+
+  // Returns false when there is no usable saved game.
+  function restoreGame() {
+    let g;
+    try { g = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { return false; }
+    if (!g || !Array.isArray(g.board) || g.board.length !== N || !Array.isArray(g.history)
+        || !g.history.length || (g.turn !== PEARL && g.turn !== ONYX)) return false;
+    for (const row of g.board) for (const p of row) if (p && p.id >= nextId) nextId = p.id + 1;
+    S.board = g.board;
+    S.turn = g.turn;
+    S.quietPlies = g.quietPlies || 0;
+    S.lastMove = g.lastMove || [];
+    S.history = g.history;
+    S.busy = false;
+    S.selected = null;
+    if (g.over && g.result) {
+      S.moves = [];
+      endGame(g.result.winner, g.result.reason);
+      return true;
+    }
+    S.over = false;
+    const [lr, lc] = g.locked || [];
+    const piece = g.locked && S.board[lr][lc];
+    // A chain resumes where it stopped, except the computer's, which replays from the turn's start.
+    if (piece && piece.color === S.turn && !(S.mode === 'ai' && S.turn === AI_COLOR)) {
+      const b2 = S.board.map(row => row.slice());
+      b2[lr][lc] = null;
+      const seqs = captureSeqs(b2, lr, lc, piece, []);
+      const steps = g.canStop ? seqs.flatMap(sq => sq.map((_, n) => sq.slice(0, n + 1))) : seqs;
+      if (steps.length) {
+        S.moves = steps.map(st => ({ from: [lr, lc], steps: st }));
+        S.locked = S.selected = [lr, lc];
+        S.canStop = !!g.canStop;
+        render();
+        return true;
+      }
+    }
+    // Otherwise restart the current turn from its snapshot, which startTurn records again.
+    const snap = S.history.pop();
+    S.board = cloneBoard(snap.board);
+    S.turn = snap.turn;
+    S.quietPlies = snap.quietPlies;
+    S.lastMove = snap.lastMove;
+    startTurn();
+    return true;
   }
 
   // ---------- Menu ----------
@@ -1018,12 +1105,13 @@
 
   // ---------- Controls ----------
   const modeSel = $('modeSel'), levelSel = $('levelSel'), tiltInput = $('tilt');
-  const soundChk = $('soundChk'), turnChk = $('turnChk');
+  const soundChk = $('soundChk'), turnChk = $('turnChk'), forceChk = $('forceChk');
   modeSel.value = S.mode;
   levelSel.value = String(S.level);
   tiltInput.value = prefs.tilt;
   soundChk.checked = prefs.sound;
   turnChk.checked = prefs.turnBoard;
+  forceChk.checked = prefs.forcedJumps;
   const syncMode = () => {
     document.body.classList.toggle('two', S.mode === '2p');
     levelSel.disabled = S.mode !== 'ai';
@@ -1043,6 +1131,11 @@
     if (prefs.sound) { Sound.unlock(); Sound.move(); }
   });
   turnChk.addEventListener('change', () => { prefs.turnBoard = turnChk.checked; savePrefs(); applyView(); });
+  forceChk.addEventListener('change', () => {
+    prefs.forcedJumps = forceChk.checked; savePrefs();
+    // takes effect now unless a turn is under way; otherwise from the next turn
+    if (!S.over && !S.busy && !S.locked) { S.selected = null; S.moves = allMoves(S.board, S.turn); render(); }
+  });
 
   // The board leans toward whoever is to move: Pearl at the bottom of the phone,
   // Onyx at the top in two-player mode.
@@ -1117,7 +1210,9 @@
   }, { capture: true });
 
   applyView();
-  newGame();
+  let restored = false;
+  try { restored = restoreGame(); } catch (e) { /* corrupt save: start afresh */ }
+  if (!restored) newGame();
 })();
 </script>
 </body>

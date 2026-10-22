@@ -29,11 +29,15 @@ python3 -m http.server 8000
 - Full American checkers rules: diagonal moves on the pink squares, mandatory captures,
   chained multi-jumps, and kings that move in every direction. The game ends when a side
   has no legal move, or is drawn after forty moves without a capture or a soldier advancing.
+- House rule: switch off "Jumps are required" in the menu and captures become optional.
+  Any jump may be passed up for a plain move, and a chain may be stopped after any jump
+  by tapping the jumping piece. The computer plays by the same rule.
 - Two players by default; a computer opponent with three strengths, driven by an
   alpha-beta search, is available from the menu.
 - A menu button in each status bar opens the settings: opponent, strength, board tilt,
-  sound, whether the board turns to each player, full screen, undo (also Ctrl/Cmd+Z) and
-  new game. Settings are remembered on the device.
+  sound, whether the board turns to each player, whether jumps are required, full screen, undo (also Ctrl/Cmd+Z) and
+  new game. Settings and the game in progress are remembered on the device,
+  so a refresh picks up exactly where play left off, mid-jump and undo history included.
 
 ## Deployment
 
