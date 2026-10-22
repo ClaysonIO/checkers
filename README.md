@@ -36,7 +36,8 @@ python3 -m http.server 8000
   alpha-beta search, is available from the menu.
 - A menu button in each status bar opens the settings: opponent, strength, board tilt,
   sound, whether the board turns to each player, whether jumps are required, full screen, undo (also Ctrl/Cmd+Z) and
-  new game. Settings are remembered on the device.
+  new game. Settings and the game in progress are remembered on the device,
+  so a refresh picks up exactly where play left off, mid-jump and undo history included.
 
 ## Deployment
 

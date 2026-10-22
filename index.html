@@ -780,6 +780,7 @@
     over: false,
     busy: false,
     quietPlies: 0,
+    result: null,
     mode: prefs.mode,
     level: prefs.level,
   };
@@ -894,6 +895,7 @@
     if (S.quietPlies >= 80) return endGame(null, 'Forty moves without a capture or a soldier advancing.');
     S.history.push({ board: cloneBoard(S.board), turn: S.turn, quietPlies: S.quietPlies, lastMove: S.lastMove.slice() });
     if (S.history.length > 200) S.history.shift();
+    saveGame();
     render();
     if (S.mode === 'ai' && S.turn === AI_COLOR) scheduleAI();
   }
@@ -924,6 +926,7 @@
       S.moves = rest;
       S.locked = step.to;
       S.selected = step.to;
+      saveGame();
       render();
       return false;
     }
@@ -977,6 +980,8 @@
 
   function endGame(winner, reason) {
     S.over = true;
+    S.result = { winner, reason };
+    saveGame();
     S.busy = false;
     S.selected = null;
     render();
@@ -1023,7 +1028,64 @@
     S.locked = null;
     S.canStop = false;
     S.moves = allMoves(S.board, S.turn);
+    saveGame();
     render();
+  }
+
+  // ---------- Saved game ----------
+  // The game is saved at the start of every turn, after each jump of a chain and
+  // when it ends, so a refresh picks up exactly where play left off.
+  const GAME_KEY = 'roseGoldCheckers.game';
+  function saveGame() {
+    const g = { board: S.board, turn: S.turn, quietPlies: S.quietPlies, lastMove: S.lastMove,
+      history: S.history, locked: S.locked, canStop: S.canStop, over: S.over, result: S.over ? S.result : null };
+    try { localStorage.setItem(GAME_KEY, JSON.stringify(g)); } catch (e) { /* storage unavailable or full */ }
+  }
+
+  // Returns false when there is no usable saved game.
+  function restoreGame() {
+    let g;
+    try { g = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { return false; }
+    if (!g || !Array.isArray(g.board) || g.board.length !== N || !Array.isArray(g.history)
+        || !g.history.length || (g.turn !== PEARL && g.turn !== ONYX)) return false;
+    for (const row of g.board) for (const p of row) if (p && p.id >= nextId) nextId = p.id + 1;
+    S.board = g.board;
+    S.turn = g.turn;
+    S.quietPlies = g.quietPlies || 0;
+    S.lastMove = g.lastMove || [];
+    S.history = g.history;
+    S.busy = false;
+    S.selected = null;
+    if (g.over && g.result) {
+      S.moves = [];
+      endGame(g.result.winner, g.result.reason);
+      return true;
+    }
+    S.over = false;
+    const [lr, lc] = g.locked || [];
+    const piece = g.locked && S.board[lr][lc];
+    // A chain resumes where it stopped, except the computer's, which replays from the turn's start.
+    if (piece && piece.color === S.turn && !(S.mode === 'ai' && S.turn === AI_COLOR)) {
+      const b2 = S.board.map(row => row.slice());
+      b2[lr][lc] = null;
+      const seqs = captureSeqs(b2, lr, lc, piece, []);
+      const steps = g.canStop ? seqs.flatMap(sq => sq.map((_, n) => sq.slice(0, n + 1))) : seqs;
+      if (steps.length) {
+        S.moves = steps.map(st => ({ from: [lr, lc], steps: st }));
+        S.locked = S.selected = [lr, lc];
+        S.canStop = !!g.canStop;
+        render();
+        return true;
+      }
+    }
+    // Otherwise restart the current turn from its snapshot, which startTurn records again.
+    const snap = S.history.pop();
+    S.board = cloneBoard(snap.board);
+    S.turn = snap.turn;
+    S.quietPlies = snap.quietPlies;
+    S.lastMove = snap.lastMove;
+    startTurn();
+    return true;
   }
 
   // ---------- Menu ----------
@@ -1145,7 +1207,9 @@
   }, { capture: true });
 
   applyView();
-  newGame();
+  let restored = false;
+  try { restored = restoreGame(); } catch (e) { /* corrupt save: start afresh */ }
+  if (!restored) newGame();
 })();
 </script>
 </body>
