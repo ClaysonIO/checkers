@@ -1,0 +1,14 @@
+{
+  "name": "Rosé & Gold Checkers",
+  "short_name": "Checkers",
+  "description": "A 3D checkers game with a golden and pink board.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#140510",
+  "theme_color": "#140510",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

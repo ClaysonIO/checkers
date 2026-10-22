@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#140510">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <title>Rosé &amp; Gold Checkers</title>
 <meta name="description" content="A 3D checkers game with a golden and pink board. Play a friend or the computer.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,12 +17,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --size: min(78vmin, 640px);
+    /* the bars above and below the board take about 150px */
+    --size: min(86vw, calc((100vh - 150px) * 1.05), 760px);
+    --size: min(86vw, calc((100dvh - 150px) * 1.05), 760px);
     --sq: calc(var(--size) / 8);
     --frame: calc(var(--sq) * 0.5);
     --thick: 30px;
-    --tilt: 50deg;
+    --tilt: 36deg;
     --spin: 0deg;
+    --turn: 0deg;
     --pz: 14px;
 
     --gold-1: #fff1bd;
@@ -40,7 +50,7 @@
 
   * { box-sizing: border-box; }
 
-  html, body { height: 100%; }
+  html, body { height: 100%; overflow: hidden; }
 
   body {
     margin: 0;
@@ -50,8 +60,17 @@
       radial-gradient(1200px 700px at 20% -10%, rgba(243, 204, 98, 0.18), transparent 60%),
       radial-gradient(900px 600px at 90% 110%, rgba(245, 139, 179, 0.22), transparent 60%),
       linear-gradient(170deg, var(--bg-1), var(--bg-2));
-    min-height: 100vh;
-    overflow-x: hidden;
+    background-attachment: fixed;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
   }
 
   body::before {
@@ -61,68 +80,28 @@
     z-index: 0;
   }
 
-  header {
-    position: relative; z-index: 2;
-    text-align: center;
-    padding: 28px 16px 6px;
-  }
-
-  h1 {
-    font-family: "Cormorant Garamond", Georgia, serif;
-    font-weight: 700;
-    font-size: clamp(34px, 5vw, 56px);
-    margin: 0;
-    letter-spacing: 0.02em;
-    background: linear-gradient(100deg, var(--gold-1) 0%, var(--gold-2) 35%, var(--pink-2) 65%, var(--pink-1) 100%);
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent;
-    text-shadow: 0 2px 30px rgba(243, 204, 98, 0.15);
-  }
-
-  h1 em { font-style: italic; font-weight: 500; }
-
-  .tagline {
-    margin: 4px 0 0;
-    color: var(--muted);
-    font-size: 14px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  main {
-    position: relative; z-index: 1;
-    display: grid;
-    grid-template-columns: 1fr minmax(260px, 320px);
-    gap: 24px;
-    align-items: center;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 10px 24px 40px;
-  }
-
   /* ---------- 3D stage ---------- */
   .stage {
-    position: relative;
-    height: calc(var(--size) * 0.82 + 80px);
-    /* projected board height follows the tilt in browsers with CSS trig functions */
-    height: calc((var(--size) + var(--frame) * 2) * cos(var(--tilt)) + var(--thick) * sin(var(--tilt)) + 110px);
-    transition: height 0.35s cubic-bezier(.2,.7,.2,1);
+    position: relative; z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     display: grid;
     place-items: center;
-    perspective: 1500px;
-    perspective-origin: 50% 20%;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
+    perspective: calc(var(--size) * 6);
+    perspective-origin: 50% 25%;
+    transition: transform 0.8s cubic-bezier(.4,0,.2,1);
   }
+  /* Seen from the far end of the table (Onyx's turn in two-player mode): the
+     view turns around while the board turns back, so the camera orbits the table. */
+  .stage.far { transform: rotate(180deg); --turn: 180deg; }
 
   .board-wrap {
     position: relative;
     width: calc(var(--size) + var(--frame) * 2);
     height: calc(var(--size) + var(--frame) * 2);
     transform-style: preserve-3d;
-    transform: rotateX(var(--tilt)) rotateZ(var(--spin));
-    transition: transform 0.35s cubic-bezier(.2,.7,.2,1);
+    transform: rotateX(var(--tilt)) rotateZ(calc(var(--spin) + var(--turn)));
+    transition: transform 0.8s cubic-bezier(.4,0,.2,1);
     will-change: transform;
   }
 
@@ -316,48 +295,53 @@
   .piece.king .cap .crown { opacity: 1; transform: scale(1); }
 
   .piece.sel .cap { box-shadow: inset 0 0 0 2px rgba(243,204,98,1), inset 0 0 0 5px rgba(255,255,255,0.7), 0 0 24px 6px rgba(255,241,189,0.6); }
-  .piece.own:not(.sel):hover { transform: translateZ(8px); }
-
-  /* ---------- panel ---------- */
-  .panel {
-    background: var(--panel);
-    border: 1px solid rgba(243,204,98,0.3);
-    border-radius: 18px;
-    padding: 22px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
-    display: flex; flex-direction: column; gap: 18px;
+  @media (hover: hover) {
+    .piece.own:not(.sel):hover { transform: translateZ(8px); }
   }
 
-  .turn {
-    display: flex; align-items: center; gap: 14px;
-    padding: 14px 16px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, rgba(243,204,98,0.14), rgba(245,139,179,0.14));
-    border: 1px solid rgba(255,241,189,0.25);
+  /* ---------- seat bars ---------- */
+  /* One bar per player, each at that player's end of the phone. In two-player
+     mode the top bar is turned around to face whoever sits at the far end. */
+  .seat {
+    position: relative; z-index: 2;
+    flex: none;
+    display: flex; align-items: center; gap: 12px;
+    margin: 10px 12px;
+    padding: 10px 10px 10px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,241,189,0.12);
+    background: rgba(0,0,0,0.18);
+    transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
   }
-  .turn .dot {
-    width: 34px; height: 34px; border-radius: 50%; flex: none;
+  .seat > :not(.menu-btn) { opacity: 0.55; transition: opacity 0.4s; }
+  .seat.active > * { opacity: 1; }
+  .seat.active {
+    opacity: 1;
+    background: linear-gradient(135deg, rgba(243,204,98,0.16), rgba(245,139,179,0.18));
+    border-color: rgba(255,241,189,0.4);
+    box-shadow: 0 0 28px rgba(245,139,179,0.22);
+  }
+  body.two .seat.top { transform: rotate(180deg); }
+  .seat .dot {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
     box-shadow: inset 0 0 0 2px var(--gold-2), 0 4px 10px rgba(0,0,0,0.4);
   }
-  .turn .dot.P { background: radial-gradient(circle at 35% 30%, #fff, #c9b8c7); }
-  .turn .dot.O { background: radial-gradient(circle at 35% 30%, #5e4a62, #0d0710); }
-  .turn .label { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-  .turn .who { font-family: "Cormorant Garamond", Georgia, serif; font-size: 26px; font-weight: 700; line-height: 1.05; }
-  .turn .note { font-size: 12px; color: var(--muted); margin-top: 2px; min-height: 1.2em; }
+  .seat .dot.P { background: radial-gradient(circle at 35% 30%, #fff, #c9b8c7); }
+  .seat .dot.O { background: radial-gradient(circle at 35% 30%, #5e4a62, #0d0710); }
+  .seat .info { flex: 1; min-width: 0; }
+  .seat .who { font-family: "Cormorant Garamond", Georgia, serif; font-size: 24px; font-weight: 700; line-height: 1.05; }
+  .seat .note { font-size: 12px; color: var(--muted); min-height: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat .count { text-align: right; line-height: 1; }
+  .seat .num { font-family: "Cormorant Garamond", Georgia, serif; font-size: 28px; font-weight: 700; }
+  .seat .sub { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
-  .score {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  .menu-btn {
+    flex: none;
+    width: 44px; height: 44px; padding: 0;
+    display: grid; place-items: center;
+    border-radius: 12px;
   }
-  .score .card {
-    border-radius: 12px; padding: 12px 14px;
-    background: rgba(0,0,0,0.22);
-    border: 1px solid rgba(255,255,255,0.06);
-  }
-  .score .name { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
-  .score .num { font-family: "Cormorant Garamond", Georgia, serif; font-size: 32px; font-weight: 700; line-height: 1; margin-top: 4px; }
-  .score .sub { font-size: 11px; color: var(--muted); }
+  .menu-btn svg { width: 22px; height: 22px; }
 
   .controls { display: grid; gap: 10px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -395,6 +379,10 @@
     width: 100%; accent-color: var(--gold-2);
   }
 
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+  .toggle input { width: 20px; height: 20px; accent-color: var(--gold-2); }
+
   .rules {
     font-size: 12.5px; line-height: 1.5; color: var(--muted);
     border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
@@ -419,11 +407,25 @@
     background: linear-gradient(160deg, rgba(123,45,88,0.9), rgba(58,16,41,0.95));
     border: 1px solid rgba(243,204,98,0.6);
     box-shadow: 0 30px 90px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
-    transform: translateY(16px) scale(0.96);
+    transform: var(--flip) translateY(16px) scale(0.96);
     transition: transform 0.4s cubic-bezier(.2,1.2,.3,1);
     max-width: 360px;
+    --flip: rotate(0deg);
   }
-  .overlay.show .modal { transform: none; }
+  .overlay.flip .modal { --flip: rotate(180deg); }
+  .overlay.show .modal { transform: var(--flip); }
+  .modal.settings {
+    text-align: left;
+    width: min(360px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    padding: 22px;
+    display: grid; gap: 16px;
+  }
+  .modal.settings header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .modal.settings h2 { font-size: 28px; margin: 0; line-height: 1.1; }
+  .modal.settings .tagline { margin: 2px 0 0; color: var(--muted); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
+  .modal.settings .close { width: 40px; height: 40px; padding: 0; font-size: 22px; line-height: 1; flex: none; }
   .modal h2 {
     font-family: "Cormorant Garamond", Georgia, serif;
     font-size: 40px; margin: 0 0 6px;
@@ -434,100 +436,101 @@
 
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-  @media (max-width: 900px) {
-    :root { --size: min(92vw, 58vh); --thick: 22px; }
-    main { grid-template-columns: 1fr; padding: 6px 16px 32px; }
+  @media (max-width: 600px) {
+    :root { --thick: 18px; --frame: calc(var(--sq) * 0.32); }
+    .coords { font-size: calc(var(--frame) * 0.7); }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .piece, .board-wrap { transition: none; }
+    .piece, .board-wrap, .stage { transition: none; }
     .sq.move::after, .sq.cap::after { animation: none; }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Rosé <em>&amp;</em> Gold Checkers</h1>
-  <p class="tagline">Pearl versus Onyx</p>
-</header>
+<div class="seat top" id="seatO">
+  <div class="dot O"></div>
+  <div class="info">
+    <div class="who" id="whoO">Onyx</div>
+    <div class="note" id="noteO"></div>
+  </div>
+  <div class="count"><div class="num" id="countO">12</div><div class="sub">pieces</div></div>
+  <button class="menu-btn" data-seat="top" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+</div>
 
-<main>
-  <section class="stage" id="stage" aria-label="Checkers board">
-    <div class="board-wrap" id="boardWrap">
-      <div class="board-shadow"></div>
-      <div class="side front"></div>
-      <div class="side back"></div>
-      <div class="side left"></div>
-      <div class="side right"></div>
-      <div class="frame">
-        <div class="inner-trim"></div>
-        <div class="coords files" aria-hidden="true">
-          <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
-        </div>
-        <div class="coords ranks" aria-hidden="true">
-          <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
-        </div>
-        <div class="board" id="board" role="grid"></div>
+<section class="stage" id="stage" aria-label="Checkers board">
+  <div class="board-wrap" id="boardWrap">
+    <div class="board-shadow"></div>
+    <div class="side front"></div>
+    <div class="side back"></div>
+    <div class="side left"></div>
+    <div class="side right"></div>
+    <div class="frame">
+      <div class="inner-trim"></div>
+      <div class="coords files" aria-hidden="true">
+        <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
       </div>
-      <div class="pieces" id="pieces"></div>
+      <div class="coords ranks" aria-hidden="true">
+        <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+      </div>
+      <div class="board" id="board" role="grid"></div>
     </div>
-  </section>
+    <div class="pieces" id="pieces"></div>
+  </div>
+</section>
 
-  <aside class="panel">
-    <div class="turn" id="turnBox">
-      <div class="dot P" id="turnDot"></div>
+<div class="seat bottom" id="seatP">
+  <div class="dot P"></div>
+  <div class="info">
+    <div class="who" id="whoP">Pearl</div>
+    <div class="note" id="noteP"></div>
+  </div>
+  <div class="count"><div class="num" id="countP">12</div><div class="sub">pieces</div></div>
+  <button class="menu-btn" data-seat="bottom" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+</div>
+
+<div class="overlay" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+  <div class="modal settings">
+    <header>
       <div>
-        <div class="label">To move</div>
-        <div class="who" id="turnWho">Pearl</div>
-        <div class="note" id="turnNote"></div>
+        <h2 id="menuTitle">Rosé &amp; Gold Checkers</h2>
+        <p class="tagline">Pearl versus Onyx</p>
       </div>
-    </div>
-
-    <div class="score">
-      <div class="card">
-        <div class="name">Pearl</div>
-        <div class="num" id="pearlCount">12</div>
-        <div class="sub">pieces on board</div>
-      </div>
-      <div class="card">
-        <div class="name">Onyx</div>
-        <div class="num" id="onyxCount">12</div>
-        <div class="sub">pieces on board</div>
-      </div>
-    </div>
-
-    <div class="controls">
-      <div class="row">
-        <label class="field">Opponent
-          <select id="modeSel">
-            <option value="ai">Computer</option>
-            <option value="2p">Two players</option>
-          </select>
-        </label>
-        <label class="field">Strength
-          <select id="levelSel">
-            <option value="2">Gentle</option>
-            <option value="4" selected>Spirited</option>
-            <option value="6">Ruthless</option>
-          </select>
-        </label>
-      </div>
-      <label class="field">Board tilt
-        <input type="range" id="tilt" min="0" max="64" value="50" aria-label="Board tilt">
+      <button class="close" id="menuClose" aria-label="Close menu">&times;</button>
+    </header>
+    <div class="row">
+      <label class="field">Opponent
+        <select id="modeSel">
+          <option value="2p">Two players</option>
+          <option value="ai">Computer</option>
+        </select>
       </label>
-      <div class="row">
-        <button id="undoBtn">Undo</button>
-        <button id="newBtn" class="primary">New game</button>
-      </div>
+      <label class="field">Strength
+        <select id="levelSel">
+          <option value="2">Gentle</option>
+          <option value="4" selected>Spirited</option>
+          <option value="6">Ruthless</option>
+        </select>
+      </label>
     </div>
-
+    <label class="field">Board tilt
+      <input type="range" id="tilt" min="0" max="64" value="36" aria-label="Board tilt">
+    </label>
+    <label class="toggle">Sound effects <input type="checkbox" id="soundChk" checked></label>
+    <label class="toggle">Turn the board to each player <input type="checkbox" id="turnChk" checked></label>
+    <button id="fsBtn">Full screen</button>
+    <div class="row">
+      <button id="undoBtn">Undo</button>
+      <button id="newBtn" class="primary">New game</button>
+    </div>
     <div class="rules">
-      <b>How to play.</b> Pearl moves first. Pieces slide diagonally on the pink squares.
+      <b>How to play.</b> Lay the phone flat between you: Pearl sits at the bottom, Onyx at the top,
+      and the board leans toward whoever is to move. Pearl moves first. Pieces slide diagonally on the pink squares.
       Captures are mandatory and chain together. Reach the far row to be crowned a king, which moves both ways.
     </div>
-  </aside>
-</main>
+  </div>
+</div>
 
 <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
   <div class="modal">
@@ -675,6 +678,85 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // ---------- Sound ----------
+  // Synthesised with Web Audio so the page needs no sound files.
+  const Sound = (() => {
+    let ctx = null;
+    let enabled = true;
+    const ensure = () => {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    };
+    // a short filtered noise burst: the knock of a piece on wood
+    function knock(t, freq, gain, dur) {
+      const len = Math.ceil(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 3;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      src.connect(bp).connect(g).connect(ctx.destination);
+      src.start(t);
+    }
+    function tone(t, freq, gain, dur, type = 'sine', toFreq) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      if (toFreq) o.frequency.exponentialRampToValueAtTime(toFreq, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+    const at = delay => (enabled && ensure()) ? ctx.currentTime + delay : null;
+    // delays line the sound up with the piece landing (see .piece transition)
+    return {
+      unlock: () => { if (enabled) ensure(); },
+      set enabled(v) { enabled = v; },
+      get enabled() { return enabled; },
+      move() {
+        const t = at(0.3); if (t === null) return;
+        knock(t, 900, 1.4, 0.08);
+        tone(t, 220, 0.12, 0.09, 'triangle', 150);
+      },
+      capture() {
+        const t = at(0.3); if (t === null) return;
+        knock(t, 1600, 1.8, 0.07);
+        knock(t + 0.07, 2400, 1.2, 0.06);
+        tone(t + 0.05, 660, 0.12, 0.25, 'triangle', 180);
+      },
+      king() {
+        const t = at(0.38); if (t === null) return;
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+          tone(t + i * 0.09, f, 0.16, 0.5, 'sine');
+          tone(t + i * 0.09, f * 2, 0.04, 0.35, 'triangle');
+        });
+      },
+      win() {
+        const t = at(0.5); if (t === null) return;
+        [392, 523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(t + i * 0.11, f, 0.14, 0.7, 'sine'));
+      },
+    };
+  })();
+
+  // ---------- Settings ----------
+  const PREFS_KEY = 'roseGoldCheckers.prefs';
+  const prefs = { mode: '2p', level: 4, tilt: 36, sound: true, turnBoard: true };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY)) || {}); } catch (e) { /* storage unavailable */ }
+  const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ } };
+  Sound.enabled = prefs.sound;
+
   // ---------- State ----------
   const S = {
     board: null,
@@ -687,8 +769,8 @@
     over: false,
     busy: false,
     quietPlies: 0,
-    mode: 'ai',
-    level: 4,
+    mode: prefs.mode,
+    level: prefs.level,
   };
   const AI_COLOR = ONYX;
 
@@ -770,20 +852,25 @@
       el.classList.toggle('last', S.lastMove.some(q => q[0] === r && q[1] === c));
     }
 
-    // panel
-    let pearl = 0, onyx = 0;
-    for (const row of S.board) for (const p of row) if (p) (p.color === PEARL ? pearl++ : onyx++);
-    $('pearlCount').textContent = pearl;
-    $('onyxCount').textContent = onyx;
-    $('turnDot').className = 'dot ' + S.turn;
-    $('turnWho').textContent = NAMES[S.turn];
-    const note = $('turnNote');
-    if (S.over) note.textContent = 'Game over';
-    else if (S.busy) note.textContent = 'Thinking…';
-    else if (S.locked) note.textContent = 'Keep jumping!';
-    else if (S.moves.length && S.moves[0].steps[0].cap) note.textContent = 'A capture is available and required.';
-    else note.textContent = S.mode === 'ai' && S.turn === AI_COLOR ? 'Computer' : (S.mode === 'ai' ? 'Your move' : '');
+    // seat bars
+    const counts = { P: 0, O: 0 };
+    for (const row of S.board) for (const p of row) if (p) counts[p.color]++;
+    for (const color of [PEARL, ONYX]) {
+      const active = !S.over && S.turn === color;
+      $('count' + color).textContent = counts[color];
+      $('seat' + color).classList.toggle('active', active);
+      $('who' + color).textContent = S.mode === 'ai' && color === AI_COLOR ? 'Computer' : NAMES[color];
+      let note = '';
+      if (S.over) note = 'Game over';
+      else if (!active) note = '';
+      else if (S.busy) note = 'Thinking…';
+      else if (S.locked) note = 'Keep jumping!';
+      else if (S.moves.length && S.moves[0].steps[0].cap) note = 'Capture required';
+      else note = 'Your move';
+      $('note' + color).textContent = note;
+    }
     $('undoBtn').disabled = S.busy || !S.history.length;
+    applyView();
   }
 
   // ---------- Turn flow ----------
@@ -810,6 +897,9 @@
     const wasKing = piece.king;
     const crowned = applyStep(S.board, from, step);
     S.lastMove = [from, step.to];
+    if (crowned) { if (step.cap) Sound.capture(); Sound.king(); }
+    else if (step.cap) Sound.capture();
+    else Sound.move();
     const rest = S.moves
       .filter(m => m.from[0] === from[0] && m.from[1] === from[1] && m.steps[0].to[0] === step.to[0] && m.steps[0].to[1] === step.to[1])
       .map(m => ({ from: step.to, steps: m.steps.slice(1) }))
@@ -870,13 +960,18 @@
     S.busy = false;
     S.selected = null;
     render();
+    closeMenu();
     $('ovTitle').textContent = winner ? NAMES[winner] + ' wins' : 'A draw';
     $('ovText').textContent = reason;
+    // face the winner (or whoever ran out of moves, on a draw)
+    $('overlay').classList.toggle('flip', S.mode === '2p' && (winner || S.turn) === ONYX);
     $('overlay').classList.add('show');
+    if (winner) Sound.win();
   }
 
   function newGame() {
     $('overlay').classList.remove('show');
+    closeMenu();
     for (const el of pieceEls.values()) el.remove();
     pieceEls.clear();
     S.board = initBoard();
@@ -910,22 +1005,58 @@
     render();
   }
 
+  // ---------- Menu ----------
+  const menuEl = $('menu');
+  function openMenu(fromTop) {
+    menuEl.classList.toggle('flip', fromTop && S.mode === '2p');
+    menuEl.classList.add('show');
+  }
+  function closeMenu() { menuEl.classList.remove('show'); }
+  document.querySelectorAll('.menu-btn').forEach(b =>
+    b.addEventListener('click', () => openMenu(b.dataset.seat === 'top')));
+  $('menuClose').addEventListener('click', closeMenu);
+  menuEl.addEventListener('click', e => { if (e.target === menuEl) closeMenu(); });
+
   // ---------- Controls ----------
+  const modeSel = $('modeSel'), levelSel = $('levelSel'), tiltInput = $('tilt');
+  const soundChk = $('soundChk'), turnChk = $('turnChk');
+  modeSel.value = S.mode;
+  levelSel.value = String(S.level);
+  tiltInput.value = prefs.tilt;
+  soundChk.checked = prefs.sound;
+  turnChk.checked = prefs.turnBoard;
+  const syncMode = () => {
+    document.body.classList.toggle('two', S.mode === '2p');
+    levelSel.disabled = S.mode !== 'ai';
+  };
+  syncMode();
+
   $('newBtn').addEventListener('click', newGame);
   $('ovBtn').addEventListener('click', newGame);
   $('ovUndo').addEventListener('click', undo);
-  $('undoBtn').addEventListener('click', undo);
-  $('modeSel').addEventListener('change', e => { S.mode = e.target.value; newGame(); });
-  $('levelSel').addEventListener('change', e => { S.level = +e.target.value; });
+  $('undoBtn').addEventListener('click', () => { undo(); closeMenu(); });
+  modeSel.addEventListener('change', () => {
+    S.mode = prefs.mode = modeSel.value; savePrefs(); syncMode(); newGame();
+  });
+  levelSel.addEventListener('change', () => { S.level = prefs.level = +levelSel.value; savePrefs(); });
+  soundChk.addEventListener('change', () => {
+    Sound.enabled = prefs.sound = soundChk.checked; savePrefs();
+    if (prefs.sound) { Sound.unlock(); Sound.move(); }
+  });
+  turnChk.addEventListener('change', () => { prefs.turnBoard = turnChk.checked; savePrefs(); applyView(); });
 
-  const tiltInput = $('tilt');
-  let baseTilt = +tiltInput.value, px = 0, py = 0;
-  const applyView = () => {
-    const tilt = Math.max(0, Math.min(70, baseTilt + py * -4));
+  // The board leans toward whoever is to move: Pearl at the bottom of the phone,
+  // Onyx at the top in two-player mode.
+  let baseTilt = prefs.tilt, px = 0, py = 0;
+  function applyView() {
+    const far = S.mode === '2p' && prefs.turnBoard && S.turn === ONYX && !S.over;
+    const tilt = Math.max(0, Math.min(70, baseTilt + py * (far ? 4 : -4)));
+    stageEl.classList.toggle('far', far);
     stageEl.style.setProperty('--tilt', tilt + 'deg');
     stageEl.style.setProperty('--spin', (px * 5) + 'deg');
-  };
-  tiltInput.addEventListener('input', () => { baseTilt = +tiltInput.value; applyView(); });
+  }
+  tiltInput.addEventListener('input', () => { baseTilt = prefs.tilt = +tiltInput.value; applyView(); });
+  tiltInput.addEventListener('change', savePrefs);
   stageEl.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse') return;
     const b = stageEl.getBoundingClientRect();
@@ -935,9 +1066,56 @@
   });
   stageEl.addEventListener('pointerleave', () => { px = 0; py = 0; applyView(); });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && S.selected && !S.locked) { S.selected = null; render(); }
+    if (e.key === 'Escape') {
+      if (menuEl.classList.contains('show')) closeMenu();
+      else if (S.selected && !S.locked) { S.selected = null; render(); }
+    }
     if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
   });
+
+  // ---------- Full screen ----------
+  // Hide the browser's toolbars, keep the phone in portrait while it lies flat,
+  // and keep the screen awake. Phones enter full screen on the first touch.
+  const root = document.documentElement;
+  const canFullscreen = !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } } catch (e) { /* not allowed */ }
+  }
+  async function enterFullscreen() {
+    try {
+      if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: 'hide' });
+      else await root.webkitRequestFullscreen();
+      if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('portrait').catch(() => {});
+    } catch (e) { /* refused */ }
+  }
+  function exitFullscreen() {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+  const fsBtn = $('fsBtn');
+  const syncFs = () => { fsBtn.textContent = isFullscreen() ? 'Exit full screen' : 'Full screen'; };
+  if (!canFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => (isFullscreen() ? exitFullscreen() : enterFullscreen()));
+  document.addEventListener('fullscreenchange', syncFs);
+  document.addEventListener('webkitfullscreenchange', syncFs);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+
+  // pointerup, not pointerdown: a touch only counts as a user gesture once it ends
+  let firstTouch = true;
+  document.addEventListener('pointerup', e => {
+    Sound.unlock();
+    keepAwake();
+    if (firstTouch && e.pointerType === 'touch' && canFullscreen && !isFullscreen()
+        && !matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
+        && !e.target.closest('.menu-btn, .modal')) {
+      enterFullscreen();
+    }
+    firstTouch = false;
+  }, { capture: true });
 
   applyView();
   newGame();
