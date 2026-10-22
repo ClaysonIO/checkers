@@ -29,20 +29,8 @@ jobs:
         with:
           enablement: true
 
-      - name: Point Pages at checkers.clayson.io
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DOMAIN: checkers.clayson.io
-        run: |
-          current="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.cname // ""' || true)"
-          if [ "$current" != "$DOMAIN" ]; then
-            gh api -X PUT "repos/${GITHUB_REPOSITORY}/pages" -f "cname=${DOMAIN}"
-            echo "Custom domain set to ${DOMAIN}"
-          else
-            echo "Custom domain already ${DOMAIN}"
-          fi
-
+      # The custom domain (checkers.clayson.io) is set once in Settings > Pages;
+      # the workflow token is not permitted to change it.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

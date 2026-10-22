@@ -32,8 +32,13 @@ python3 -m http.server 8000
 
 The site is published with GitHub Pages at https://checkers.clayson.io.
 Every push to the default branch runs `.github/workflows/pages.yml`, which enables Pages
-on first run, sets the custom domain, and deploys the repository root. DNS for
-`checkers.clayson.io` is a CNAME record pointing at `claysonio.github.io`.
+on first run and deploys the repository root.
+
+One-time setup for the domain:
+
+1. DNS: add a CNAME record for `checkers` pointing at `claysonio.github.io`.
+2. GitHub: Settings → Pages → Custom domain, enter `checkers.clayson.io`, save, and tick
+   "Enforce HTTPS" once the certificate has been issued.
 
 ## Files
 
