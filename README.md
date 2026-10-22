@@ -28,6 +28,13 @@ python3 -m http.server 8000
   animated captures and crownings.
 - Responsive layout that stacks the panel beneath the board on phones.
 
+## Deployment
+
+The site is published with GitHub Pages at https://checkers.clayson.io.
+Every push to the default branch runs `.github/workflows/pages.yml`, which enables Pages
+on first run, sets the custom domain, and deploys the repository root. DNS for
+`checkers.clayson.io` is a CNAME record pointing at `claysonio.github.io`.
+
 ## Files
 
 - `index.html` contains the whole app: markup, styles, game rules, and the AI.
