@@ -1011,6 +1011,9 @@
 
   function undo() {
     if (S.busy || !S.history.length) return;
+    // At the start of a turn the last snapshot is that same turn: step past it,
+    // so undo takes back the previous move rather than doing nothing.
+    if (!S.locked && !S.over && S.history.length > 1) S.history.pop();
     let snap = S.history.pop();
     // In computer mode, rewind to the start of the human's last turn.
     if (S.mode === 'ai') {
