@@ -19,8 +19,8 @@ python3 -m http.server 8000
 
 - Made for a phone lying flat between two players: Pearl sits at the bottom edge and
   Onyx at the top. The board fills the screen, each player has a status bar at their own
-  end (the far one turned to face them), and when the turn passes the view swings around
-  the table so the board leans toward whoever is to move.
+  end (the far one turned to face them), and when the turn passes the board tilts the
+  other way so it leans toward whoever is to move.
 - Full screen: phones drop the browser toolbars on the first touch, lock to portrait and
   keep the screen awake. Adding the page to the home screen launches it full screen too.
 - Sound effects for moves, captures, crownings and wins, synthesised with Web Audio.

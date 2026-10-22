@@ -25,7 +25,6 @@
     --thick: 30px;
     --tilt: 36deg;
     --spin: 0deg;
-    --turn: 0deg;
     --pz: 14px;
 
     --gold-1: #fff1bd;
@@ -89,18 +88,18 @@
     place-items: center;
     perspective: calc(var(--size) * 6);
     perspective-origin: 50% 25%;
-    transition: transform 0.8s cubic-bezier(.4,0,.2,1);
+    transition: perspective-origin 0.8s cubic-bezier(.4,0,.2,1);
   }
-  /* Seen from the far end of the table (Onyx's turn in two-player mode): the
-     view turns around while the board turns back, so the camera orbits the table. */
-  .stage.far { transform: rotate(180deg); --turn: 180deg; }
+  /* Onyx's turn in two-player mode: the board tilts the other way so it leans
+     toward the player at the top of the phone. */
+  .stage.far { perspective-origin: 50% 75%; }
 
   .board-wrap {
     position: relative;
     width: calc(var(--size) + var(--frame) * 2);
     height: calc(var(--size) + var(--frame) * 2);
     transform-style: preserve-3d;
-    transform: rotateX(var(--tilt)) rotateZ(calc(var(--spin) + var(--turn)));
+    transform: rotateX(var(--tilt)) rotateZ(var(--spin));
     transition: transform 0.8s cubic-bezier(.4,0,.2,1);
     will-change: transform;
   }
@@ -1052,7 +1051,7 @@
     const far = S.mode === '2p' && prefs.turnBoard && S.turn === ONYX && !S.over;
     const tilt = Math.max(0, Math.min(70, baseTilt + py * (far ? 4 : -4)));
     stageEl.classList.toggle('far', far);
-    stageEl.style.setProperty('--tilt', tilt + 'deg');
+    stageEl.style.setProperty('--tilt', (far ? -tilt : tilt) + 'deg');
     stageEl.style.setProperty('--spin', (px * 5) + 'deg');
   }
   tiltInput.addEventListener('input', () => { baseTilt = prefs.tilt = +tiltInput.value; applyView(); });
